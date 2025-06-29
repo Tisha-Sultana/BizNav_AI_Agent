@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>BizNav - AI Business Strategist</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-[#0f1117] text-white font-sans">
+  <nav class="bg-[#151922] px-8 py-4 flex justify-between items-center">
+    <div class="text-teal-300 text-2xl font-bold">BizNav</div>
+    <div class="space-x-6">
+      <a href="#" class="text-white hover:text-teal-300">Dashboard</a>
+      <a href="#" class="text-white hover:text-teal-300">Upload Data</a>
+      <a href="#" class="text-white hover:text-teal-300">Insights</a>
+      <a href="#" class="text-white hover:text-teal-300">Chat</a>
+    </div>
+    <div class="text-white">User: Acme</div>
+  </nav>
+
+  <main class="max-w-6xl mx-auto p-8 grid grid-cols-2 gap-6 mt-8">
+    <section class="bg-[#1a1d26] rounded-2xl p-6 border border-gray-700">
+      <h2 class="text-lg font-semibold mb-4">Smart Upload Panel</h2>
+      <div class="border border-dashed border-gray-600 p-6 rounded-xl text-center">
+        <input type="file" id="fileInput" class="block w-full text-sm text-gray-300 mb-4" />
+        <button onclick="uploadFile()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded">Upload & Analyze</button>
+      </div>
+    </section>
+
+    <section class="bg-[#1a1d26] rounded-2xl p-6 border border-gray-700">
+      <h2 class="text-lg font-semibold mb-4">AI Chat Interface <span class="text-sm text-gray-400">(Agent Panel)</span></h2>
+      <div class="flex items-start gap-4">
+        <div class="w-10 h-10 bg-gray-700 rounded-full flex items-center justify-center text-xl">🤖</div>
+        <div class="space-y-2" id="agentPanel"></div>
+      </div>
+    </section>
+
+    <section class="bg-[#1a1d26] rounded-2xl p-6 border border-gray-700 col-span-2">
+      <h2 class="text-lg font-semibold mb-4">Visual Insight</h2>
+      <canvas id="lineChart" height="100"></canvas>
+    </section>
+
+    <section class="bg-[#1a1d26] rounded-2xl p-6 border border-gray-700 col-span-2">
+      <h2 class="text-lg font-semibold mb-4">Insight Output</h2>
+      <div id="response" class="space-y-4"></div>
+    </section>
+  </main>
+
+  <script>
+    let chartInstance = null;
+
+    function uploadFile() {
+      const file = document.getElementById('fileInput').files[0];
+      if (!file) {
+        alert("Please select a file before uploading.");
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append("file", file);
+
+      fetch("/upload", {
+        method: "POST",
+        body: formData
+      })
+      .then(res => res.json())
+      .then(data => {
+        const container = document.getElementById("response");
+        container.innerHTML = "";
+
+        const card = document.createElement("div");
+        card.className = "bg-[#1a1d26] border border-gray-700 p-4 rounded-xl shadow";
+
+        const title = document.createElement("div");
+        title.className = "text-sm font-semibold text-pink-500 mb-2";
+        title.innerText = "🔍 BizNav Insight";
+
+        const insight = document.createElement("p");
+        insight.className = "text-gray-200 leading-relaxed";
+        insight.innerText = data.ai_insight || "No insight received from AI.";
+
+        card.appendChild(title);
+        card.appendChild(insight);
+        container.appendChild(card);
+
+        const agentPanel = document.getElementById("agentPanel");
+        agentPanel.innerHTML = "";
+
+        if (data.spike_info) {
+          const messageBox = document.createElement("div");
+          messageBox.className = "bg-gray-800 p-3 rounded-lg mt-2";
+          messageBox.innerText = data.spike_info.message;
+
+          const btnContainer = document.createElement("div");
+          btnContainer.className = "mt-2 flex gap-2";
+
+          const yesBtn = document.createElement("button");
+          yesBtn.className = "bg-blue-600 px-3 py-1 rounded hover:bg-blue-700";
+          yesBtn.innerText = "Yes";
+          yesBtn.onclick = () => {
+            fetch("/explore-spike", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                product: data.spike_info.product,
+                reason: "spike in data"
+              })
+            })
+            .then(res => res.json())
+            .then(insight => {
+              const followUpCard = document.createElement("div");
+              followUpCard.className = "bg-[#1a1d26] border border-gray-700 p-4 rounded-xl shadow mt-4";
+              const title = document.createElement("div");
+              title.className = "text-sm font-semibold text-blue-500 mb-2";
+              title.innerText = "🤖 Follow-Up Insight";
+              const text = document.createElement("p");
+              text.className = "text-gray-200 leading-relaxed";
+              text.innerText = insight.insight || "No follow-up insight.";
+              followUpCard.appendChild(title);
+              followUpCard.appendChild(text);
+              agentPanel.appendChild(followUpCard);
+            });
+          };
+
+          const ignoreBtn = document.createElement("button");
+          ignoreBtn.className = "bg-gray-600 px-3 py-1 rounded hover:bg-gray-700";
+          ignoreBtn.innerText = "Ignore";
+          ignoreBtn.onclick = () => {
+            agentPanel.innerHTML = "<div class='text-gray-500'>Insight ignored.</div>";
+          };
+
+          btnContainer.appendChild(yesBtn);
+          btnContainer.appendChild(ignoreBtn);
+          agentPanel.appendChild(messageBox);
+          agentPanel.appendChild(btnContainer);
+        } else {
+          agentPanel.innerHTML = "<div class='text-gray-500'>No spikes detected.</div>";
+        }
+
+        if (data.chart_data) {
+          const ctx = document.getElementById('lineChart').getContext('2d');
+          if (chartInstance) chartInstance.destroy();
+          chartInstance = new Chart(ctx, {
+            type: 'line',
+            data: {
+              labels: data.chart_data.labels,
+              datasets: data.chart_data.datasets.map((ds, idx) => ({
+                ...ds,
+                borderColor: `hsl(${idx * 30 % 360}, 70%, 60%)`,
+                fill: false,
+                tension: 0.3
+              }))
+            },
+            options: {
+              responsive: true,
+              plugins: {
+                legend: { labels: { color: 'white' } }
+              },
+              scales: {
+                x: { ticks: { color: 'white' } },
+                y: { ticks: { color: 'white' } }
+              }
+            }
+          });
+        }
+      })
+      .catch(err => {
+        alert("Something went wrong: " + err.message);
+      });
+    }
+  </script>
+</body>
+</html>
